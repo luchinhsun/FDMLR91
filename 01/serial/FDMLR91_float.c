@@ -1,122 +1,123 @@
 // BarModel1.cpp : 定義控制台應用程式的入口點。
 //
 
-#include "stdafx.h"
+//#include "stdafx.h"
 #include <iostream>
 #include <iomanip>
 #include <math.h>
 #include <fstream>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/timeb.h>
 
 using std::cout;
 using std::endl;
 
-//*******FDM parameters for LR91 *******
+//-*******FDM parameters for LR91 *******
 int const nx = 1000, ny = 1000;//grid numbers
-double dx = 0.015, dy = 0.015;//space step, 3cm*3cm
-double D = 0.001;//D: diffusion coefficient cm^2/ms
+float dx = 0.015, dy = 0.015;//space step, 3cm*3cm
+float D = 0.001;//D: diffusion coefficient cm^2/ms
 
 /* Time Step */
-double dt = 0.02; // Time step (ms)
-double t; // Time (ms)
+float dt = 0.02; // Time step (ms)
+float t; // Time (ms)
 int steps; // Number of Steps
 int increment; // Loop Control Variable
 
 /* Voltage */
-double V[nx + 2][nx + 2]; // Initial Voltage (mv)
-double dV2[nx + 2][nx + 2]; // second order derivatives of Voltage (mv)
-double Vnew[nx + 2][nx + 2];// New Voltage (mV)
-double dvdt; // Change in Voltage / Change in Time (mV/ms)
-double dvdtnew; // New dv/dt (mV/ms)
+float V[nx + 2][nx + 2]; // Initial Voltage (mv)
+float dV2[nx + 2][nx + 2]; // second order derivatives of Voltage (mv)
+float Vnew[nx + 2][nx + 2];// New Voltage (mV)
+float dvdt; // Change in Voltage / Change in Time (mV/ms)
+float dvdtnew; // New dv/dt (mV/ms)
 
 /* Total Current and Stimulus */
-double st; // Constant Stimulus (uA/cm^2)
-double tstim; //Time Stimulus is Applied (ms)//Time to begin stimulus
-double stimtime; //Time period during which stimulus is applied (ms)
-double it[nx + 1][nx + 1]; // Total current (uA/cm^2)
+float st; // Constant Stimulus (uA/cm^2)
+float tstim; //Time Stimulus is Applied (ms)//Time to begin stimulus
+float stimtime; //Time period during which stimulus is applied (ms)
+float it[nx + 1][nx + 1]; // Total current (uA/cm^2)
 
 /* Terms for Solution of Conductance and Reversal Potential */
-const double R = 8314; // Universal Gas Constant (J/kmol*K)
-const double frdy = 96485; // Faraday's Constant (C/mol)
-double temp = 310; // Temperature (K)
+const float R = 8314; // Universal Gas Constant (J/kmol*K)
+const float frdy = 96485; // Faraday's Constant (C/mol)
+float temp = 310; // Temperature (K)
 
 /* Ion Concentrations */
-double nai; // Intracellular Na Concentration (mM)
-double nao; // Extracellular Na Concentration (mM)
-double cai[nx + 1][nx + 1]; // Intracellular Ca Concentration (mM)
-double cao; // Extracellular Ca Concentration (mM)
-double ki; // Intracellular K Concentration (mM)
-double ko; // Extracellular K Concentration (mM)
+float nai; // Intracellular Na Concentration (mM)
+float nao; // Extracellular Na Concentration (mM)
+float cai[nx + 1][nx + 1]; // Intracellular Ca Concentration (mM)
+float cao; // Extracellular Ca Concentration (mM)
+float ki; // Intracellular K Concentration (mM)
+float ko; // Extracellular K Concentration (mM)
 
 /* Fast Sodium Current (time dependant) */
-double ina[nx + 1][nx + 1]; // Fast Na Current (uA/uF)
-double gna; // Max. Conductance of the Na Channel (mS/uF)
-double ena; // Reversal Potential of Na (mV)
-double am; // Na alpha-m rate constant (ms^-1)
-double bm; // Na beta-m rate constant (ms^-1)
-double ah; // Na alpha-h rate constant (ms^-1)
-double bh; // Na beta-h rate constant (ms^-1)
-double aj; // Na alpha-j rate constant (ms^-1)
-double bj; // Na beta-j rate constant (ms^-1)
-double mtau; // Na activation
-double htau; // Na inactivation
-double jtau; // Na inactivation
-double mss; // Na activation
-double hss; // Na inactivation
-double jss; // Na slow inactivation
-double m[nx + 1][nx + 1]; // Na activation
-double h[nx + 1][nx + 1]; // Na inactivation
-double jj[nx + 1][nx + 1]; // Na slow inactivation
+float ina[nx + 1][nx + 1]; // Fast Na Current (uA/uF)
+float gna; // Max. Conductance of the Na Channel (mS/uF)
+float ena; // Reversal Potential of Na (mV)
+float am; // Na alpha-m rate constant (ms^-1)
+float bm; // Na beta-m rate constant (ms^-1)
+float ah; // Na alpha-h rate constant (ms^-1)
+float bh; // Na beta-h rate constant (ms^-1)
+float aj; // Na alpha-j rate constant (ms^-1)
+float bj; // Na beta-j rate constant (ms^-1)
+float mtau; // Na activation
+float htau; // Na inactivation
+float jtau; // Na inactivation
+float mss; // Na activation
+float hss; // Na inactivation
+float jss; // Na slow inactivation
+float m[nx + 1][nx + 1]; // Na activation
+float h[nx + 1][nx + 1]; // Na inactivation
+float jj[nx + 1][nx + 1]; // Na slow inactivation
 
 /* Current through L-type Ca Channel */
-double dcai; // Change in myoplasmic Ca concentration (mM)
-double isi[nx + 1][nx + 1]; // Slow inward current (uA/uF)
-double esi[nx + 1][nx + 1]; // Reversal Potential of si (mV)
-double ad; // Ca alpha-d rate constant (ms^-1)
-double bd; // Ca beta-d rate constant (ms^-1)
-double af; // Ca alpha-f rate constant (ms^-1)
-double bf; // Ca beta-f rate constant (ms^-1)
+float dcai; // Change in myoplasmic Ca concentration (mM)
+float isi[nx + 1][nx + 1]; // Slow inward current (uA/uF)
+float esi[nx + 1][nx + 1]; // Reversal Potential of si (mV)
+float ad; // Ca alpha-d rate constant (ms^-1)
+float bd; // Ca beta-d rate constant (ms^-1)
+float af; // Ca alpha-f rate constant (ms^-1)
+float bf; // Ca beta-f rate constant (ms^-1)
 
-double d[nx + 1][nx + 1]; // Voltage dependant activation gate
-double dss; // Steady-state value of activation gate d
-double taud; // Time constant of gate d (ms^-1)----mistake ???？ms？
-double f[nx + 1][nx + 1]; // Voltage dependant inactivation gate
-double fss; // Steady-state value of inactivation gate f
-double tauf; // Time constant of gate f (ms^-1)
-double fca[nx + 1][nx + 1]; // Ca dependant inactivation gate -from LR94
+float d[nx + 1][nx + 1]; // Voltage dependant activation gate
+float dss; // Steady-state value of activation gate d
+float taud; // Time constant of gate d (ms^-1)----mistake ???？ms？
+float f[nx + 1][nx + 1]; // Voltage dependant inactivation gate
+float fss; // Steady-state value of inactivation gate f
+float tauf; // Time constant of gate f (ms^-1)
+float fca[nx + 1][nx + 1]; // Ca dependant inactivation gate -from LR94
 
 /* Time-dependent potassium current*/
-double ik[nx + 1][nx + 1]; // Rapidly Activating K Current (uA/uF)
-double gk; // Channel Conductance of Rapidly Activating K Current (mS/uF)
-double ek; // Reversal Potential of Rapidly Activating K Current (mV)
-double ax; // K alpha-x rate constant (ms^-1)
-double bx; // K beta-x rate constant (ms^-1)
-double X[nx + 1][nx + 1]; // Rapidly Activating K time-dependant activation  --gate X in LR91
-double xss; // Steady-state value of inactivation gate xr  --gate X in LR91
-double taux; // Time constant of gate xr (ms^-1) --gate X in LR91
-double Xi; // K time-independent inactivation --gate Xi in LR91
+float ik[nx + 1][nx + 1]; // Rapidly Activating K Current (uA/uF)
+float gk; // Channel Conductance of Rapidly Activating K Current (mS/uF)
+float ek; // Reversal Potential of Rapidly Activating K Current (mV)
+float ax; // K alpha-x rate constant (ms^-1)
+float bx; // K beta-x rate constant (ms^-1)
+float X[nx + 1][nx + 1]; // Rapidly Activating K time-dependant activation  --gate X in LR91
+float xss; // Steady-state value of inactivation gate xr  --gate X in LR91
+float taux; // Time constant of gate xr (ms^-1) --gate X in LR91
+float Xi; // K time-independent inactivation --gate Xi in LR91
 
 /* Potassium Current (time-independent) */
-double ik1[nx + 1][nx + 1]; // Time-independent K current (uA/uF)
-double gk1; // Channel Conductance of Time Independant K Current (mS/uF)
-double ek1; // Reversal Potential of Time Independant K Current (mV)
-double ak1; // K alpha-ki rate constant (ms^-1)
-double bk1; // K beta-ki rate constant (ms^-1)
-double K1ss; // Steady-state value of K inactivation gate K1
+float ik1[nx + 1][nx + 1]; // Time-independent K current (uA/uF)
+float gk1; // Channel Conductance of Time Independant K Current (mS/uF)
+float ek1; // Reversal Potential of Time Independant K Current (mV)
+float ak1; // K alpha-ki rate constant (ms^-1)
+float bk1; // K beta-ki rate constant (ms^-1)
+float K1ss; // Steady-state value of K inactivation gate K1
 
 /* Plateau Potassium Current */
-double ikp[nx + 1][nx + 1]; // Plateau K current (uA/uF)
-double gkp; // Channel Conductance of Plateau K Current (mS/uF)
-double ekp; // Reversal Potential of Plateau K Current (mV)
-double kp; // K plateau factor
+float ikp[nx + 1][nx + 1]; // Plateau K current (uA/uF)
+float gkp; // Channel Conductance of Plateau K Current (mS/uF)
+float ekp; // Reversal Potential of Plateau K Current (mV)
+float kp; // K plateau factor
 
 /* Background Current */
-double ib[nx + 1][nx + 1]; // Background current (uA/uF)
+float ib[nx + 1][nx + 1]; // Background current (uA/uF)
 
 //performance compared
-double Vmax, dvdt_max = 0, APD90, TNP, CPUtime;
-double Vold, v_onset;
+float Vmax, dvdt_max = 0, APD90, TNP, CPUtime;
+float Vold, v_onset;
 int flag = 0;
 long f_count = 0;
 
@@ -168,11 +169,12 @@ int main(int argc, char* argv[])
 	int index = 0;// filename index from 1-5
 	char filename[100];
 
-	clock_t start, end;
-	start = clock();
+	struct timeb start, end;
+        int diff;
+        ftime(&start);
 	for (ncount = 0; ncount <= 50000; ncount++){//30000 steps, 600ms
 		for (i = 1; i < nx + 1; i++){
-			//****no flux boundary conditions*****
+			//-****no flux boundary conditions*****
 			V[i][0] = V[i][1];
 			V[i][ny + 1] = V[i][ny];
 			for (j = 1; j < ny + 1; j++){
@@ -180,8 +182,7 @@ int main(int argc, char* argv[])
 				V[nx + 1][j] = V[nx][j];
 			}
 		}
-
-		//*********** Center Differnce for Space *******
+		//-*********** Center Differnce for Space *******
 		for (i = 1; i < nx + 1; i++){
 			for (j = 1; j < ny + 1; j++){
 				comp_ina(i, j);
@@ -192,11 +193,12 @@ int main(int argc, char* argv[])
 				comp_ib(i, j);
 				comp_it(i, j);
 
-				dV2[i][j] = -it[i][j] + D*((V[i + 1][j] + V[i - 1][j] - 2 * V[i][j]) / (dx*dx) + (V[i][j + 1] + V[i][j - 1] - 2 * V[i][j]) / (dy*dy));
+				dV2[i][j] = -it[i][j] + D*((V[i + 1][j] + V[i - 1][j] - 2 * V[i][j]) / (dx*dx) +
+						(V[i][j + 1] + V[i][j - 1] - 2 * V[i][j]) / (dy*dy));
 			}
 		}
 
-		//*****stimulation with a plane waves****
+		//-*****stimulation with a plane waves****
 		if (ncount >= 0 && ncount <= 100) { //stimulus is hold with 0.5 ms, 0.02*25 = 0.5ms
 			for (i = 1; i < nx + 1; i++){
 				for (j = 1; j <= 5; j++){//最少3列細胞才能激發平面波
@@ -231,7 +233,7 @@ int main(int argc, char* argv[])
 		}
 
 		t = t + dt;
-		//***********trancation 1/2 of the plane wave to generate a spiral wave******
+		//-***********trancation 1/2 of the plane wave to generate a spiral wave******
 		if (ncount == 20000){
 			for (i = 1; i < nx / 2; i++){
 				for (j = 1; j < ny; j++){
@@ -247,9 +249,11 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
-	end = clock();
-	double time_used = (double)(end - start) / CLK_TCK;
-	fprintf(fevaluation, "%g", time_used);
+	ftime(&end);
+        diff = (int)(1000.0*(end.time-start.time)+(end.millitm-start.millitm));
+        printf("\nTime = %d ms\n", diff);
+	//float time_used = (float)(end - start) / CLK_TCK;
+	//fprintf(fevaluation, "%g", time_used);
 }
 /********************************************************/
 /* Functions that describe the currents begin here */
@@ -317,7 +321,7 @@ void comp_ical(int i, int j) {
 void comp_ik(int i, int j) {
 	gk = 0.282*sqrt(ko / 5.4);
 	ek = ((R*temp) / frdy)*log(ko / ki);
-	//double prnak = 0.01833;
+	//float prnak = 0.01833;
 	//ek = ((R*temp) / frdy)*log((ko + prnak*nao) / (ki + prnak*nai));
 
 	ax = 0.0005*exp(0.083*(V[i][j] + 50)) / (1 + exp(0.057*(V[i][j] + 50)));
@@ -328,7 +332,7 @@ void comp_ik(int i, int j) {
 	X[i][j] = xss - (xss - X[i][j])*exp(-dt / taux);
 
 	if (V[i][j] > -100) {
-		Xi = 2.837*(exp(0.04*(V[i][j] + 77)) - 1) / ((V[i][j] + 77)*exp(0.04*(V[i][j] + 35)));
+		Xi = 2.837*(exp(0.04*(V[i][j] + 77)) - 1) / ((V[i][j] + 77 + 1e-15)*exp(0.04*(V[i][j] + 35)));
 	}
 	else {
 		Xi = 1;
@@ -344,7 +348,8 @@ void comp_ik1(int i, int j) {
 	ek1 = ((R*temp) / frdy)*log(ko / ki);
 
 	ak1 = 1.02 / (1 + exp(0.2385*(V[i][j] - ek1 - 59.215)));
-	bk1 = (0.49124*exp(0.08032*(V[i][j] - ek1 + 5.476)) + exp(0.06175*(V[i][j] - ek1 - 594.31))) / (1 + exp(-0.5143*(V[i][j] - ek1 + 4.753)));
+	bk1 = (0.49124*exp(0.08032*(V[i][j] - ek1 + 5.476)) + exp(0.06175*(V[i][j] - ek1 - 594.31)))
+			/(1 + exp(-0.5143*(V[i][j] - ek1 + 4.753)));
 	K1ss = ak1 / (ak1 + bk1);
 
 	ik1[i][j] = gk1*K1ss*(V[i][j] - ek1);
